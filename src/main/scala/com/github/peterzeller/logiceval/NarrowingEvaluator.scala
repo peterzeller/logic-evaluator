@@ -9,8 +9,8 @@ import scala.collection.{AbstractIterable, View, immutable, mutable}
 
 object NarrowingEvaluator {
 
-  def startEval[T](expr: Expr[T]): T =
-    eval(expr)(Ctxt())
+  def startEval[T](expr: Expr[T], typeEnv: TypeEnv): T =
+    eval(expr)(Ctxt(typeEnv))
 
 
   sealed abstract class SymbolicValue[T] {
@@ -66,7 +66,7 @@ object NarrowingEvaluator {
 
   class EvalException(msg: String, exc: Throwable = null) extends Exception(msg, exc)
 
-  case class Ctxt(varValues: HMap[Var, SymbolicValue] = HMap[Var, SymbolicValue]()) {
+  case class Ctxt(typeEnv: TypeEnv, varValues: HMap[Var, SymbolicValue] = HMap[Var, SymbolicValue]()) {
     def +[T](v: (Var[T], SymbolicValue[T])): Ctxt = copy(varValues = varValues + v)
 
     def apply[T](v: Var[T]): SymbolicValue[T] =
@@ -96,7 +96,7 @@ object NarrowingEvaluator {
   def evalS[T](expr: Expr[T])(implicit ctxt: Ctxt): SymbolicValue[T] = expr match {
     case v: Var[t] => ctxt(v)
     case f: Forall[T] =>
-      val setV: Iterable[T] = f.typ.values
+      val setV: Iterable[T] = f.typ.values(ctxt.typeEnv)
       val v = f.v
       val body = f.body
 

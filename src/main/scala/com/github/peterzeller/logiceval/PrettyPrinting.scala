@@ -14,7 +14,7 @@ object PrettyPrinting {
     case MapType(keyType, valueType) => "Set[" <> printTyp(keyType) <> ", " <> printTyp(valueType) <> "]"
     case Datatype(name, cases) =>
       name
-    case CustomType(name, customValues) =>
+    case CustomType(name) =>
       name
     case BoolType() =>
       "Bool"

@@ -11,10 +11,14 @@ import scala.math.Ordering.Implicits.seqOrdering
  */
 object SimpleLogic {
 
+  abstract class TypeEnv {
+    def customTypeValues[T](c: CustomType[T]): Iterable[T]
+  }
+
   sealed abstract class Type[T] {
     def print: String = PrettyPrinting.printTyp(this).prettyStr(120)
 
-    def values: Iterable[T]
+    def values(env: TypeEnv): Iterable[T]
 
     def cast(x: Any): T =
       x.asInstanceOf[T]
@@ -36,18 +40,18 @@ object SimpleLogic {
   }
 
   case class SetType[T](elemType: Type[T]) extends Type[Set[T]] {
-    override def values: Iterable[Set[T]] = ???
+    override def values(env: TypeEnv): Iterable[Set[T]] = ???
   }
 
   case class MapType[K, V](keyType: Type[K], valueType: Type[V]) extends Type[Map[K, V]] {
-    override def values: Iterable[Map[K, V]] = ???
+    override def values(env: TypeEnv): Iterable[Map[K, V]] = ???
   }
 
   case class Datatype[T](name: String, cases: List[DtCase[T]]) extends Type[T] {
-    override def values: Iterable[T] = {
+    override def values(env: TypeEnv): Iterable[T] = {
       for {
         c <- cases.to(LazyList)
-        argList = c.argTypes.map(_.values.to(LazyList))
+        argList = c.argTypes.map(_.values(env).to(LazyList))
         args <- LazyListUtils.allCombinations(argList)
       } yield {
         c.construct(args)
@@ -57,21 +61,22 @@ object SimpleLogic {
 
   case class DtCase[T](name: String, argTypes: List[Type[_]], construct: List[Any] => T)
 
-  case class CustomType[T](name: String, customValues: Set[T]) extends Type[T] {
-    override def values: Iterable[T] = customValues
+  case class CustomType[T](name: String) extends Type[T] {
+    override def values(env: TypeEnv): Iterable[T] = env.customTypeValues(this)
   }
 
   case class PairType[A, B](a: Type[A], b: Type[B]) extends Type[(A, B)] {
-    override def values: Iterable[(A, B)] =
+    override def values(env: TypeEnv): Iterable[(A, B)] =
       for {
-        x <- a.values
-        y <- b.values
+        x <- a.values(env)
+        y <- b.values(env)
       } yield (x, y)
   }
 
   case class BoolType() extends Type[Boolean] {
-    override val values: Iterable[Boolean] = Set(false, true)
+    override def values(env: TypeEnv): Iterable[Boolean] = bools
   }
+  private val bools = Set(false, true)
 
 
   sealed abstract class Expr[T] {
@@ -95,6 +100,8 @@ object SimpleLogic {
         c.args.view.flatMap(_.freeVars).toSet
       case e: Get[k, v] =>
         e.map.freeVars ++ e.key.freeVars
+      case p: Pair[_, _] =>
+        p.a.freeVars ++ p.b.freeVars
       case o: Opaque[_, _] =>
         o.arg.freeVars
       case c: ConstExpr[_] =>

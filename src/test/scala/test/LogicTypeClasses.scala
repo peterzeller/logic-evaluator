@@ -17,9 +17,19 @@ import scala.collection.immutable
 
 object LogicTypeClasses {
 
-  private val intType = CustomType("Int", (0 to 5).toSet)
-  private val unitType = CustomType("Unit", Set(0))
+  private val intType = CustomType("Int")
+  private val unitType = CustomType("Unit")
 
+  private val intDomain = (0 to 5).toSet
+  private val unitDomain = Set(0)
+
+  val typeEnv: TypeEnv = new TypeEnv {
+    override def customTypeValues[T](c: CustomType[T]): Iterable[T] = {
+      if (c == intType) intDomain.asInstanceOf[Set[T]]
+      else if (c == unitType) unitDomain.asInstanceOf[Set[T]]
+      else ???
+    }
+  }
 
   def typeGen(size: Int): Gen[Type[Any]] = {
     oneOf(
@@ -38,8 +48,8 @@ object LogicTypeClasses {
       Math.pow(2, typeSize(keyType) + typeSize(valueType)).toInt
     case Datatype(name, cases) =>
       cases.map(c => c.argTypes.map(t => typeSize(t)).product).sum
-    case CustomType(name, customValues) =>
-      customValues.size
+    case c: CustomType[t] =>
+      typeEnv.customTypeValues(c).size
     case SimpleLogic.BoolType() =>
       2
   }
@@ -112,8 +122,8 @@ object LogicTypeClasses {
         } yield {
           c.construct(args)
         }
-      case CustomType(name, customValues) =>
-        Gen.oneOf(customValues)
+      case c: CustomType[t] =>
+        Gen.oneOf(typeEnv.customTypeValues(c))
       case SimpleLogic.BoolType() =>
         Gen.oneOf(false, true)
     }
