@@ -1,11 +1,15 @@
 package test
 
+import java.lang.Math.{log, min}
+
 import com.github.peterzeller.logiceval.SimpleLogic
-import com.github.peterzeller.logiceval.SimpleLogic.{And, AnyValue, BoolType, BoolVal, ConstExpr, ConstructDt, CustomType, Datatype, DatatypeValue, DtCase, Eq, Expr, Forall, Get, IsElem, MapType, MapValue, Neg, SetType, SetValue, Type, Value, Var}
+import com.github.peterzeller.logiceval.SimpleLogic._
 import org.scalacheck.{Arbitrary, Gen}
 import org.scalacheck._
 import Gen._
 import Arbitrary.arbitrary
+import com.github.peterzeller.logiceval.NarrowingEvaluator.AnyValue
+import com.github.peterzeller.logiceval.utils.HMap
 import org.scalacheck.util.Buildable
 import test.LogicTypeClasses.valueGen
 
@@ -13,20 +17,21 @@ import scala.collection.immutable
 
 object LogicTypeClasses {
 
-  private val intType = CustomType("Int", (0 to 5).map(AnyValue).toSet)
-  private val unitType = CustomType("Unit", Set(0).map(AnyValue))
+  private val intType = CustomType("Int", (0 to 5).toSet)
+  private val unitType = CustomType("Unit", Set(0))
 
 
-  def typeGen(size: Int): Gen[Type] = {
+  def typeGen(size: Int): Gen[Type[Any]] = {
     oneOf(
-      Gen.const(BoolType),
+      Gen.const(BoolType()),
       Gen.const(intType),
       Gen.const(unitType),
-      if (size <= 0) Gen.const(BoolType) else Gen.lzy(genDatatype(size))
-    )
+      if (size <= 0) Gen.const(BoolType()) else Gen.lzy(genDatatype(size))
+    ).asInstanceOf[Gen[Type[Any]]]
   }
 
-  def typeSize(x: Type): Int = x match {
+  /** estimate size of a type */
+  def typeSize(x: Type[_]): Int = x match {
     case SetType(elemType) =>
       Math.pow(2, typeSize(elemType)).toInt
     case MapType(keyType, valueType) =>
@@ -35,24 +40,42 @@ object LogicTypeClasses {
       cases.map(c => c.argTypes.map(t => typeSize(t)).product).sum
     case CustomType(name, customValues) =>
       customValues.size
-    case SimpleLogic.BoolType =>
+    case SimpleLogic.BoolType() =>
       2
   }
 
-  def genDatatype(size: Int): Gen[Datatype] = {
+  def constructPair(p: List[Any]): Any =
+    (p(0), p(1))
+
+  def constructSome(p: List[Any]): Any =
+    Some(p(0))
+
+  def constructNone(p: List[Any]): Any =
+    None
+
+  def constructLeft(p: List[Any]): Any =
+    Left(p(0))
+
+  def constructRight(p: List[Any]): Any =
+    Right(p(0))
+
+  def genDatatype[T](size: Int): Gen[Datatype[T]] = {
     oneOf(
       // pair
       for (x <- typeGen(size / 3); y <- typeGen(size / typeSize(x))) yield
-        Datatype(s"Prod[${x.print}, ${y.print}]", List(DtCase("Pair", List(x, y)))),
+        Datatype(s"Prod[${x.print}, ${y.print}]", List(
+          DtCase("Pair", List(x, y), constructPair))),
       // option
       for (x <- typeGen(size / 2)) yield
-        Datatype(s"Option[${x.print}]", List(DtCase("None", List()), DtCase("Some", List(x)))),
+        Datatype(s"Option[${x.print}]", List(
+          DtCase("None", List(), constructNone),
+          DtCase("Some", List(x), constructSome))),
       // either
       for (x <- typeGen(size / 3); y <- typeGen(size / typeSize(x))) yield
         Datatype(s"Either[${x.print}, ${y.print}]", List(
-          DtCase("Left", List(x)),
-          DtCase("Right", List(y)))),
-    )
+          DtCase("Left", List(x), constructLeft),
+          DtCase("Right", List(y), constructRight))),
+    ).asInstanceOf[Gen[Datatype[T]]]
   }
 
   def pairGen[A, B](a: Gen[A], b: Gen[B]): Gen[(A, B)] =
@@ -68,33 +91,35 @@ object LogicTypeClasses {
   //      case ::(head, next) =>
   //    }
 
-  def valueGen(t: Type, size: Int): Gen[Value] = {
+  def valueGen[T](t: Type[T], size: Int): Gen[T] = {
     t match {
-      case SimpleLogic.SetType(elemType) =>
+      case st: SimpleLogic.SetType[t] =>
         for {
-          elems <- Gen.containerOfN[Set, Value](size, valueGen(elemType, size / 2))
-        } yield SetValue(elems)
-      case SimpleLogic.MapType(keyType, valueType) =>
+          elems <- Gen.containerOfN[Set, t](min(typeSize(t), log(size).toInt), valueGen(st.elemType, size / 2))
+        } yield elems
+      case mt: SimpleLogic.MapType[k, v] =>
+        val keyType = mt.keyType
+        val valueType = mt.valueType
         for {
-          elems <- Gen.mapOfN[Value, Value](size,
+          elems <- Gen.mapOfN[k, v](min(typeSize(keyType), log(size).toInt),
             pairGen(valueGen(keyType, size / 2),
-              valueGen(valueType, size/2)))
-          default <- valueGen(valueType, size/2)
-        } yield MapValue(elems, default)
+              valueGen(valueType, size / 2)))
+        } yield elems
       case Datatype(name, cases) =>
         for {
           c <- Gen.oneOf(cases)
-          args <- Gen.sequence[List[Value], Value](c.argTypes.map(valueGen(_, size/2)))
-        } yield
-          DatatypeValue(c.name, args)
+          args <- Gen.sequence[List[Any], Any](c.argTypes.map(valueGen(_, size / 2)))
+        } yield {
+          c.construct(args)
+        }
       case CustomType(name, customValues) =>
         Gen.oneOf(customValues)
-      case SimpleLogic.BoolType =>
-        Gen.oneOf(BoolVal(false), BoolVal(true))
+      case SimpleLogic.BoolType() =>
+        Gen.oneOf(false, true)
     }
   }
 
-  def nextVar(vars: Map[Var, Type]): Var = {
+  def nextVar[T](vars: HMap[Var, Type]): Var[T] = {
     var i = 1
     while (vars.contains(Var(s"x$i"))) {
       i += 1
@@ -102,33 +127,35 @@ object LogicTypeClasses {
     Var(s"x$i")
   }
 
-  def exprGen(t: Type, size: Int, vars: Map[Var, Type]): Gen[Expr] = {
+
+  def exprGen[T](t: Type[T], size: Int, vars: HMap[Var, Type]): Gen[Expr[T]] = {
     if (size <= 0) {
       // generate leaf if size is 0
       constExprGen(t, size)
     } else {
-      val vars2: List[Var] = vars.filter(p => p._2 == t).keys.toList
-      val varGens: List[(Int, Gen[Expr])] = vars2.map(v => (100, Gen.const(v)))
-      val normalGens: List[(Int, Gen[Expr])] = {
+      val vars2: List[Var[_]] = vars.filter(p => p._2 == t).keys.toList
+      val varGens: List[(Int, Gen[Expr[_]])] = vars2.map(v => (100, Gen.const(v)))
+      val normalGens: List[(Int, Gen[Expr[_]])] = {
         t match {
-          case SimpleLogic.BoolType =>
+          case SimpleLogic.BoolType() =>
+            val varTypesGen: List[Gen[Type[Any]]] = vars.values.map(Gen.const).toList.asInstanceOf[List[Gen[Type[Any]]]]
             List(
               200 -> (for {
-                x <- Gen.lzy(exprGen(BoolType, size - 1, vars))
+                x <- Gen.lzy(exprGen(BoolType(), size - 1, vars))
               } yield Neg(x)),
               150 -> (for {
-                x <- Gen.lzy(exprGen(BoolType, size / 2, vars))
-                y <- Gen.lzy(exprGen(BoolType, size / 2, vars))
+                x <- Gen.lzy(exprGen(BoolType(), size / 2, vars))
+                y <- Gen.lzy(exprGen(BoolType(), size / 2, vars))
               } yield And(x, y)),
               50 -> (for {
-                t <- oneOfL(typeGen(size / 3) :: vars.values.map(Gen.const).toList)
-                l <- Gen.lzy(exprGen(t, size / 3, vars))
-                r <- Gen.lzy(exprGen(t, size / 3, vars))
-              } yield Eq(l, r)),
+                t: Type[Any] <- oneOfL(typeGen(size / 3) :: varTypesGen)
+                l: Expr[Any] <- Gen.lzy(exprGen[Any](t, size / 3, vars))
+                r: Expr[Any] <- Gen.lzy(exprGen[Any](t, size / 3, vars))
+              } yield Eq[Any](l, r).asInstanceOf[Expr[T]]),
               200 -> (for {
-                vt <- typeGen(size / 2)
-                v = nextVar(vars)
-                b <- Gen.lzy(exprGen(BoolType, size / 2, vars + (v -> vt)))
+                vt: Type[Any] <- typeGen(size / 2)
+                v: Var[Any] = nextVar(vars)
+                b <- Gen.lzy(exprGen(BoolType(), size / 2, vars + (v -> vt)))
               } yield Forall(v, vt, b)),
               30 -> (for {
                 et <- typeGen(size / 2)
@@ -136,32 +163,33 @@ object LogicTypeClasses {
                 set <- Gen.lzy(exprGen(SetType(et), size / 2, vars))
               } yield IsElem(elem, set))
             )
-          case SimpleLogic.Datatype(name, cases) =>
+          case dt@SimpleLogic.Datatype(name, cases) =>
             List(
               100 -> (for {
                 c <- Gen.oneOf(cases)
-                args <- Gen.lzy(Gen.sequence[List[Expr], Expr](c.argTypes.map(exprGen(_, size / c.argTypes.size - 1, vars))))
-              } yield ConstructDt(c.name, args))
+                args <- Gen.lzy(Gen.sequence[List[Expr[_]], Expr[_]](c.argTypes.map(exprGen(_, size / c.argTypes.size - 1, vars))))
+              } yield ConstructDt(dt, c.name, c.construct, args))
             )
           case _ =>
             // generate a constant expression for the type
             List()
         }
       }
-      val mapLookupGen: Gen[Expr] =
+      val mapLookupGen: Gen[Expr[_]] =
         for {
           keyType <- typeGen(size / 2)
           map <- Gen.lzy(exprGen(MapType(keyType, t), size / 2, vars))
           key <- Gen.lzy(exprGen(keyType, size / 2, vars))
-        } yield Get(map, key)
+          default <- Gen.lzy(exprGen(t, size / 2, vars))
+        } yield Get(map, key, default)
 
-      val gens: List[(Int, Gen[Expr])] = varGens ++ normalGens ++ List(
-        5 ->  constExprGen(t, size),
+      val gens: List[(Int, Gen[Expr[_]])] = varGens ++ normalGens ++ List(
+        5 -> constExprGen(t, size),
         1 -> mapLookupGen
       )
 
 
-      Gen.frequency(gens: _*)
+      Gen.frequency(gens: _*).asInstanceOf[Gen[Expr[T]]]
     }
   }
 
@@ -170,14 +198,14 @@ object LogicTypeClasses {
     case x :: y :: zs => Gen.oneOf(x, y, zs: _*)
   }
 
-  private def constExprGen(t: Type, size: Int): Gen[Expr] = {
+  private def constExprGen[T](t: Type[T], size: Int): Gen[Expr[T]] = {
     for {
       elems <- valueGen(t, size)
-    } yield ConstExpr(elems)
+    } yield ConstExpr(elems)(t)
   }
 
-  implicit val exprArg: Arbitrary[Expr] = Arbitrary(
-    Gen.sized(size => exprGen(BoolType, size, Map())))
+  implicit val exprArg: Arbitrary[Expr[Boolean]] = Arbitrary(
+    Gen.sized(size => exprGen(BoolType(), size, HMap[Var, Type]())))
 
 
 }

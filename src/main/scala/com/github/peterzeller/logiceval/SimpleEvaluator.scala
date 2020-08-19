@@ -1,58 +1,46 @@
 package com.github.peterzeller.logiceval
 
-import com.github.peterzeller.logiceval.NarrowingEvaluator.Concrete
 import com.github.peterzeller.logiceval.SimpleLogic._
+import com.github.peterzeller.logiceval.utils.HMap
+import shapeless.Id
 
 object SimpleEvaluator {
-  def startEval(expr: Expr): Value =
-    eval(expr)(Ctxt(Map()))
+  def startEval[T](expr: Expr[T]): T =
+    eval(expr)(Ctxt())
 
 
   class EvalException(msg: String, exc: Throwable = null) extends Exception(msg, exc)
 
-  case class Ctxt(varValues: Map[Var, Value]) {
-    def +(v: (Var, Value)): Ctxt = copy(varValues = varValues + v)
+  case class Ctxt(varValues: HMap[Var, Id] = HMap[Var, Id]()) {
+    def +[T](v: (Var[T], T)): Ctxt = copy(varValues = varValues + v)
 
-    def apply(v: Var): Value =
+    def apply[T](v: Var[T]): T =
       varValues.getOrElse(v,
         throw new EvalException(s"Could not find $v in ${varValues.values}"))
   }
 
-  def evalB(expr: Expr)(implicit ctxt: Ctxt): Boolean =
-    eval(expr) match {
-      case BoolVal(value) => value
-      case other =>
-        throw new EvalException(s"Expected Bool but found $other")
-    }
 
-  def evalSet(expr: Expr)(implicit ctxt: Ctxt): Set[Value] =
-    eval(expr) match {
-      case SetValue(values) => values
-      case other =>
-        throw new EvalException(s"Expected Set but found $other")
-    }
-
-
-  def eval(expr: Expr)(implicit ctxt: Ctxt): Value = expr match {
-    case v: Var => ctxt(v)
+  def eval[T](expr: Expr[T])(implicit ctxt: Ctxt): T = expr match {
+    case v: Var[T] => ctxt(v)
     case Forall(v, t, body) =>
-      BoolVal(t.values.forall(x => evalB(body)(ctxt + (v -> x))))
+      t.values.forall(x => eval(body)(ctxt + (v -> x)))
     case Neg(negatedExpr) =>
-      BoolVal(!evalB(negatedExpr))
+      !eval(negatedExpr)
     case And(left, right) =>
-      BoolVal(evalB(left) && evalB(right))
+      eval(left) && eval(right)
     case Eq(left, right) =>
-      BoolVal(eval(left) == eval(right))
+      eval(left) == eval(right)
     case IsElem(elem, set) =>
-      BoolVal(evalSet(set).contains(eval(elem)))
-    case ConstructDt(name, args) =>
-      DatatypeValue(name, args.map(eval))
-    case Get(map, key) =>
-      val m = eval(map)
-      val k = eval(key)
-      m.getFromMap(k)
-    case Opaque(func, args) =>
-      func(args.map(eval))
+      eval(set).contains(eval(elem))
+    case c: ConstructDt[t] =>
+      val argsE: List[Any] = c.args.map((e: Expr[_]) => eval(e))
+      c.construct(argsE)
+    case g: Get[k, v] =>
+      val m = eval(g.map)
+      val k = eval(g.key)
+      m.getOrElse(k, eval(g.default))
+    case g: Opaque[a, r] =>
+      g.func(eval(g.arg))
     case ConstExpr(v) => v
   }
 

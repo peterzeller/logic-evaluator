@@ -13,7 +13,7 @@ object Optimizer {
    *     forall x. !(A && B)  ~> !((forall x. A) && B)  // if x not free in B
    *     forall x. !(A && B)  ~> !(A && (forall x. B))  // if x not free in A
    */
-  def narrowQuantifiers(expr: Expr): Expr = {
+  def narrowQuantifiers[T](expr: Expr[T]): Expr[T] = {
     ???
   }
 

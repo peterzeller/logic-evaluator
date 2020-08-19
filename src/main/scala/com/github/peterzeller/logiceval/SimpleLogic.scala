@@ -1,6 +1,7 @@
 package com.github.peterzeller.logiceval
 
 import com.github.peterzeller.logiceval.utils.{LazyListUtils, PrettyPrintDoc}
+import scala.reflect.runtime.universe._
 
 import scala.math.Ordered.orderingToOrdered
 import scala.math.Ordering.Implicits.seqOrdering
@@ -10,162 +11,133 @@ import scala.math.Ordering.Implicits.seqOrdering
  */
 object SimpleLogic {
 
-  sealed abstract class Type {
+  sealed abstract class Type[T] {
     def print: String = PrettyPrinting.printTyp(this).prettyStr(120)
 
-    def values: Iterable[Value] = this match {
-      case SetType(elemType) => ???
-      case MapType(keyType, valueType) => ???
-      case Datatype(name, cases) =>
-        for {
-          c <- cases.to(LazyList)
-          argList: List[LazyList[Value]] = c.argTypes.map(_.values.to(LazyList))
-          args <- LazyListUtils.allCombinations(argList)
-        } yield {
-          DatatypeValue(c.name, args)
-        }
-      case CustomType(name, customValues) => customValues
-      case BoolType => Set(BoolVal(false), BoolVal(true))
-    }
+    def values: Iterable[T]
+
+    def cast(x: Any): T =
+      x.asInstanceOf[T]
+
+    //    def values: Iterable[T] = this match {
+    //      case SetType(elemType) => ???
+    //      case MapType(keyType, valueType) => ???
+    //      case Datatype(name, cases) =>
+    //        for {
+    //          c <- cases.to(LazyList)
+    //          argList = c.argTypes.map(_.values.to(LazyList))
+    //          args <- LazyListUtils.allCombinations(argList)
+    //        } yield {
+    //          c.construct(args)
+    //        }
+    //      case CustomType(name, customValues) => customValues
+    //      case BoolType() => Set(false, true)
+    //    }
   }
 
-  case class SetType(elemType: Type) extends Type
-
-  case class MapType(keyType: Type, valueType: Type) extends Type
-
-  case class Datatype(name: String, cases: List[DtCase]) extends Type
-
-  case class DtCase(name: String, argTypes: List[Type])
-
-  case class CustomType(name: String, customValues: Set[Value]) extends Type
-
-  object BoolType extends Type {
-    override def toString: String = "BoolType"
+  case class SetType[T](elemType: Type[T]) extends Type[Set[T]] {
+    override def values: Iterable[Set[T]] = ???
   }
 
-
-  sealed abstract class Expr {
-    def doc: PrettyPrintDoc.Doc = PrettyPrinting.printExpr(this, 100)
-
-    override def toString: String = doc.prettyStr(120)
-
-    def freeVars: Set[Var] = this match {
-      case v: Var => Set(v)
-      case Forall(v, typ, body) =>
-        body.freeVars - v
-      case Neg(negatedExpr) =>
-        negatedExpr.freeVars
-      case And(left, right) =>
-        left.freeVars ++ right.freeVars
-      case Eq(left, right) =>
-        left.freeVars ++ right.freeVars
-      case IsElem(elem, set) =>
-        elem.freeVars ++ set.freeVars
-      case ConstructDt(name, args) =>
-        args.view.flatMap(_.freeVars).toSet
-      case Get(map, key) =>
-        map.freeVars ++ key.freeVars
-      case Opaque(func, args) =>
-        args.view.flatMap(_.freeVars).toSet
-      case ConstExpr(v) =>
-        Set()
-    }
+  case class MapType[K, V](keyType: Type[K], valueType: Type[V]) extends Type[Map[K, V]] {
+    override def values: Iterable[Map[K, V]] = ???
   }
 
-  case class Var(name: String) extends Expr
-
-  case class Forall(v: Var, typ: Type, body: Expr) extends Expr
-
-  case class Neg(negatedExpr: Expr) extends Expr
-
-  case class And(left: Expr, right: Expr) extends Expr
-
-  case class Eq(left: Expr, right: Expr) extends Expr
-
-  case class IsElem(elem: Expr, set: Expr) extends Expr
-
-  case class ConstructDt(name: String, args: List[Expr]) extends Expr
-
-  case class Get(map: Expr, key: Expr) extends Expr
-
-  case class Opaque(func: List[Value] => Value, args: List[Expr]) extends Expr
-
-  case class ConstExpr(v: Value) extends Expr
-
-
-  sealed abstract class Value extends Ordered[Value] {
-    def getFromMap(k: Value): Value = this match {
-      case MapValue(map, default) =>
-        map.getOrElse(k, default)
-      case other => throw new Exception(s"unhandled case $other")
-    }
-
-    def boolVal: Boolean = this match {
-      case BoolVal(value) => value
-      case other => throw new Exception(s"unhandled case $other")
-    }
-
-
-    override def compare(that: Value): Int = {
-      this match {
-        case BoolVal(value) =>
-          that match {
-            case BoolVal(value2) =>
-              value compare value2
-            case _ => -1
-          }
-        case AnyValue(value) =>
-          that match {
-            case BoolVal(value2) => 1
-            case AnyValue(value2) =>
-              try {
-                value.asInstanceOf[Comparable[Any]].compareTo(value2)
-              } catch {
-                case _: Throwable =>
-                  value.toString compare value2.toString
-              }
-            case _ => -1
-          }
-        case SetValue(values) =>
-          that match {
-            case BoolVal(value2) => 1
-            case AnyValue(value2) => 1
-            case SetValue(values2) =>
-              values.toList compare values2.toList
-            case MapValue(map2, default2) => -1
-            case DatatypeValue(name2, args2) => -1
-          }
-        case MapValue(map, default) =>
-          that match {
-            case BoolVal(value2) => 1
-            case AnyValue(value2) => 1
-            case SetValue(values2) => 1
-            case MapValue(map2, default2) =>
-              (map.toList, default) compare (map2.toList, default2)
-            case DatatypeValue(name2, args2) => -1
-          }
-        case DatatypeValue(name, args) =>
-          that match {
-            case BoolVal(value2) =>1
-            case AnyValue(value2) =>1
-            case SetValue(values2) =>1
-            case MapValue(map2, default2) =>1
-            case DatatypeValue(name2, args2) =>
-              (name, args) compare (name2, args2)
-          }
+  case class Datatype[T](name: String, cases: List[DtCase[T]]) extends Type[T] {
+    override def values: Iterable[T] = {
+      for {
+        c <- cases.to(LazyList)
+        argList = c.argTypes.map(_.values.to(LazyList))
+        args <- LazyListUtils.allCombinations(argList)
+      } yield {
+        c.construct(args)
       }
     }
   }
 
-  case class BoolVal(value: Boolean) extends Value
+  case class DtCase[T](name: String, argTypes: List[Type[_]], construct: List[Any] => T)
 
-  case class AnyValue(value: Any) extends Value
+  case class CustomType[T](name: String, customValues: Set[T]) extends Type[T] {
+    override def values: Iterable[T] = customValues
+  }
 
-  case class SetValue(values: Set[Value]) extends Value
+  case class PairType[A, B](a: Type[A], b: Type[B]) extends Type[(A, B)] {
+    override def values: Iterable[(A, B)] =
+      for {
+        x <- a.values
+        y <- b.values
+      } yield (x, y)
+  }
 
-  case class MapValue(map: Map[Value, Value], default: Value) extends Value
+  case class BoolType() extends Type[Boolean] {
+    override val values: Iterable[Boolean] = Set(false, true)
+  }
 
-  case class DatatypeValue(name: String, args: List[Value]) extends Value
+
+  sealed abstract class Expr[T] {
+    def doc: PrettyPrintDoc.Doc = PrettyPrinting.printExpr(this, 100)
+
+    override def toString: String = doc.prettyStr(120)
+
+    def freeVars: Set[Var[_]] = this match {
+      case v: Var[_] => Set(v)
+      case f: Forall[t] =>
+        f.body.freeVars - f.v
+      case n: Neg =>
+        n.negatedExpr.freeVars
+      case a: And =>
+        a.left.freeVars ++ a.right.freeVars
+      case e: Eq[t] =>
+        e.left.freeVars ++ e.right.freeVars
+      case e: IsElem[t] =>
+        e.elem.freeVars ++ e.set.freeVars
+      case c: ConstructDt[t] =>
+        c.args.view.flatMap(_.freeVars).toSet
+      case e: Get[k, v] =>
+        e.map.freeVars ++ e.key.freeVars
+      case o: Opaque[_, _] =>
+        o.arg.freeVars
+      case c: ConstExpr[_] =>
+        Set()
+    }
+  }
+
+  case class Var[T](name: String) extends Expr[T]
+
+  case class Forall[T](v: Var[T], typ: Type[T], body: Expr[Boolean]) extends Expr[Boolean]
+
+  case class Neg(negatedExpr: Expr[Boolean]) extends Expr[Boolean]
+
+  case class And(left: Expr[Boolean], right: Expr[Boolean]) extends Expr[Boolean]
+
+  case class Eq[T](left: Expr[T], right: Expr[T]) extends Expr[Boolean]
+
+  case class IsElem[T](elem: Expr[T], set: Expr[Set[T]]) extends Expr[Boolean]
+
+  case class ConstructDt[T](typ: Datatype[T], name: String, construct: List[Any] => T, args: List[Expr[_]]) extends Expr[T]
+
+  def optionType[T](t: Type[T]): Datatype[Option[T]] =
+    Datatype("Option", List(
+      DtCase("None", List(), x => Some(t.cast(x.head))),
+      DtCase("Some", List(t), x => None)
+    ))
+
+  def SomeE[T](elem: Expr[T])(implicit t: Type[T]): Expr[Option[T]] =
+    ConstructDt(optionType(t), "Some", x => Some(x.head.asInstanceOf[T]), List(elem))
+
+  def NoneE[T](implicit t: Type[T]): Expr[Option[T]] =
+    ConstructDt(optionType(t), "None", _ => None, List())
+
+
+  case class Get[K, V](map: Expr[Map[K, V]], key: Expr[K], default: Expr[V]) extends Expr[V]
+
+  case class Pair[A, B](a: Expr[A], b: Expr[B]) extends Expr[(A, B)]
+
+  case class Opaque[A, R](argType: Type[A], resultType: Type[R], func: A => R, arg: Expr[A]) extends Expr[R]
+
+  case class ConstExpr[T](v: T)(implicit val typ: Type[T]) extends Expr[T]
+
+  //  case class DatatypeValue(name: String, args: T)
 
 
 }
