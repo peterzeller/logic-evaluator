@@ -32,12 +32,6 @@ object SimpleEvaluator {
         throw new EvalException(s"Expected Set but found $other")
     }
 
-  def evalMap(expr: Expr)(implicit ctxt: Ctxt): Map[Value, Value] =
-    eval(expr) match {
-      case MapValue(values) => values
-      case other =>
-        throw new EvalException(s"Expected Map but found $other")
-    }
 
   def eval(expr: Expr)(implicit ctxt: Ctxt): Value = expr match {
     case v: Var => ctxt(v)
@@ -48,17 +42,15 @@ object SimpleEvaluator {
     case And(left, right) =>
       BoolVal(evalB(left) && evalB(right))
     case Eq(left, right) =>
-      BoolVal(evalB(left) == evalB(right))
+      BoolVal(eval(left) == eval(right))
     case IsElem(elem, set) =>
       BoolVal(evalSet(set).contains(eval(elem)))
     case ConstructDt(name, args) =>
       DatatypeValue(name, args.map(eval))
-    case Domain(map) =>
-      SetValue(evalMap(map).keySet)
     case Get(map, key) =>
-      val m = evalMap(map)
+      val m = eval(map)
       val k = eval(key)
-      m.getOrElse(k, throw new EvalException(s"Could not find $k in map $m"))
+      m.getFromMap(k)
     case Opaque(func, args) =>
       func(args.map(eval))
     case ConstExpr(v) => v

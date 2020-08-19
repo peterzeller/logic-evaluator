@@ -90,7 +90,6 @@ object ReverseEvaluator {
       case Eq(left, right) => ???
       case IsElem(elem, set) => ???
       case ConstructDt(name, args) => ???
-      case Domain(map) => ???
       case Get(map, key) => ???
     }
 
