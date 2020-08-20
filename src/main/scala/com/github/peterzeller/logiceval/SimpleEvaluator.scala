@@ -5,13 +5,13 @@ import com.github.peterzeller.logiceval.utils.HMap
 import shapeless.Id
 
 object SimpleEvaluator {
-  def startEval[T](expr: Expr[T], typeEnv: TypeEnv): T =
+  def startEval[T](expr: Expr[T], typeEnv: Env): T =
     eval(expr)(Ctxt(typeEnv))
 
 
   class EvalException(msg: String, exc: Throwable = null) extends Exception(msg, exc)
 
-  case class Ctxt(typeEnv: TypeEnv, varValues: HMap[Var, Id] = HMap[Var, Id]()) {
+  case class Ctxt(env: Env, varValues: HMap[Var, Id] = HMap[Var, Id]()) {
     def +[T](v: (Var[T], T)): Ctxt = copy(varValues = varValues + v)
 
     def apply[T](v: Var[T]): T =
@@ -23,7 +23,7 @@ object SimpleEvaluator {
   def eval[T](expr: Expr[T])(implicit ctxt: Ctxt): T = expr match {
     case v: Var[T] => ctxt(v)
     case Forall(v, t, body) =>
-      t.values(ctxt.typeEnv).forall(x => eval(body)(ctxt + (v -> x)))
+      t.values(ctxt.env).forall(x => eval(body)(ctxt + (v -> x)))
     case Neg(negatedExpr) =>
       !eval(negatedExpr)
     case And(left, right) =>
@@ -42,7 +42,7 @@ object SimpleEvaluator {
     case Pair(a, b) =>
       (eval(a), eval(b))
     case g: Opaque[a, r] =>
-      g.func(eval(g.arg))
+      g.func(ctxt.env, eval(g.arg))
     case ConstExpr(v) => v
   }
 

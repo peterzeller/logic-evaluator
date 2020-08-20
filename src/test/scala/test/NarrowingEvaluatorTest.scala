@@ -92,7 +92,7 @@ class NarrowingEvaluatorTest extends AnyFunSuite {
 
   }
 
-  def testExpr(expr: Expr[_])(implicit typeEnv: TypeEnv): Unit = {
+  def testExpr(expr: Expr[_])(implicit typeEnv: Env): Unit = {
     val (t1, r1) = measure(() => SimpleEvaluator.startEval(expr, typeEnv))
     val (t2, r2) = measure(() => NarrowingEvaluator.startEval(expr, typeEnv))
 
@@ -121,7 +121,7 @@ class NarrowingEvaluatorTest extends AnyFunSuite {
     implicit val t_int: Type[Int] = CustomType("Int")
     implicit val t_int_set: Type[Set[Int]] = SetType(t_int)
 
-    implicit val typeEnv: TypeEnv = new TypeEnv {
+    implicit val typeEnv: Env = new Env {
       override def customTypeValues[T](c: CustomType[T]): Iterable[T] = intDom.asInstanceOf[Set[T]]
     }
 
@@ -157,7 +157,7 @@ class NarrowingEvaluatorTest extends AnyFunSuite {
     implicit val t_int: Type[Int] = CustomType("Int")
     implicit val t_int_set: Type[Set[Int]] = SetType(t_int)
 
-    implicit val typeEnv: TypeEnv = new TypeEnv {
+    implicit val typeEnv: Env = new Env {
       override def customTypeValues[T](c: CustomType[T]): Iterable[T] = intDom.asInstanceOf[Set[T]]
     }
 

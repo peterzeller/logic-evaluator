@@ -23,7 +23,7 @@ object LogicTypeClasses {
   private val intDomain = (0 to 5).toSet
   private val unitDomain = Set(0)
 
-  val typeEnv: TypeEnv = new TypeEnv {
+  val typeEnv: Env = new Env {
     override def customTypeValues[T](c: CustomType[T]): Iterable[T] = {
       if (c == intType) intDomain.asInstanceOf[Set[T]]
       else if (c == unitType) unitDomain.asInstanceOf[Set[T]]

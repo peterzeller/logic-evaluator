@@ -11,14 +11,17 @@ import scala.math.Ordering.Implicits.seqOrdering
  */
 object SimpleLogic {
 
-  abstract class TypeEnv {
+  /**
+   * Environment in which formulas are evaluated
+   */
+  abstract class Env {
     def customTypeValues[T](c: CustomType[T]): Iterable[T]
   }
 
   sealed abstract class Type[T] {
     def print: String = PrettyPrinting.printTyp(this).prettyStr(120)
 
-    def values(env: TypeEnv): Iterable[T]
+    def values(env: Env): Iterable[T]
 
     def cast(x: Any): T =
       x.asInstanceOf[T]
@@ -40,15 +43,15 @@ object SimpleLogic {
   }
 
   case class SetType[T](elemType: Type[T]) extends Type[Set[T]] {
-    override def values(env: TypeEnv): Iterable[Set[T]] = ???
+    override def values(env: Env): Iterable[Set[T]] = ???
   }
 
   case class MapType[K, V](keyType: Type[K], valueType: Type[V]) extends Type[Map[K, V]] {
-    override def values(env: TypeEnv): Iterable[Map[K, V]] = ???
+    override def values(env: Env): Iterable[Map[K, V]] = ???
   }
 
   case class Datatype[T](name: String, cases: List[DtCase[T]]) extends Type[T] {
-    override def values(env: TypeEnv): Iterable[T] = {
+    override def values(env: Env): Iterable[T] = {
       for {
         c <- cases.to(LazyList)
         argList = c.argTypes.map(_.values(env).to(LazyList))
@@ -62,11 +65,11 @@ object SimpleLogic {
   case class DtCase[T](name: String, argTypes: List[Type[_]], construct: List[Any] => T)
 
   case class CustomType[T](name: String) extends Type[T] {
-    override def values(env: TypeEnv): Iterable[T] = env.customTypeValues(this)
+    override def values(env: Env): Iterable[T] = env.customTypeValues(this)
   }
 
   case class PairType[A, B](a: Type[A], b: Type[B]) extends Type[(A, B)] {
-    override def values(env: TypeEnv): Iterable[(A, B)] =
+    override def values(env: Env): Iterable[(A, B)] =
       for {
         x <- a.values(env)
         y <- b.values(env)
@@ -74,8 +77,9 @@ object SimpleLogic {
   }
 
   case class BoolType() extends Type[Boolean] {
-    override def values(env: TypeEnv): Iterable[Boolean] = bools
+    override def values(env: Env): Iterable[Boolean] = bools
   }
+
   private val bools = Set(false, true)
 
 
@@ -140,7 +144,7 @@ object SimpleLogic {
 
   case class Pair[A, B](a: Expr[A], b: Expr[B]) extends Expr[(A, B)]
 
-  case class Opaque[A, R](argType: Type[A], resultType: Type[R], func: A => R, arg: Expr[A]) extends Expr[R]
+  case class Opaque[A, R](argType: Type[A], resultType: Type[R], func: (Env, A) => R, arg: Expr[A]) extends Expr[R]
 
   case class ConstExpr[T](v: T)(implicit val typ: Type[T]) extends Expr[T]
 

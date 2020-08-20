@@ -9,7 +9,7 @@ import scala.collection.{AbstractIterable, View, immutable, mutable}
 
 object NarrowingEvaluator {
 
-  def startEval[T](expr: Expr[T], typeEnv: TypeEnv): T =
+  def startEval[T](expr: Expr[T], typeEnv: Env): T =
     eval(expr)(Ctxt(typeEnv))
 
 
@@ -66,7 +66,7 @@ object NarrowingEvaluator {
 
   class EvalException(msg: String, exc: Throwable = null) extends Exception(msg, exc)
 
-  case class Ctxt(typeEnv: TypeEnv, varValues: HMap[Var, SymbolicValue] = HMap[Var, SymbolicValue]()) {
+  case class Ctxt(env: Env, varValues: HMap[Var, SymbolicValue] = HMap[Var, SymbolicValue]()) {
     def +[T](v: (Var[T], SymbolicValue[T])): Ctxt = copy(varValues = varValues + v)
 
     def apply[T](v: Var[T]): SymbolicValue[T] =
@@ -96,7 +96,7 @@ object NarrowingEvaluator {
   def evalS[T](expr: Expr[T])(implicit ctxt: Ctxt): SymbolicValue[T] = expr match {
     case v: Var[t] => ctxt(v)
     case f: Forall[T] =>
-      val setV: Iterable[T] = f.typ.values(ctxt.typeEnv)
+      val setV: Iterable[T] = f.typ.values(ctxt.env)
       val v = f.v
       val body = f.body
 
@@ -237,7 +237,7 @@ object NarrowingEvaluator {
     case p: Pair[x,y] =>
       Concrete((eval(p.a), eval(p.b)))
     case o: Opaque[a, r] =>
-      Concrete(o.func(eval(o.arg)))
+      Concrete(o.func(ctxt.env, eval(o.arg)))
     case ConstExpr(v) => Concrete(v)
   }
 
