@@ -17,11 +17,11 @@ import scala.collection.immutable
 
 object LogicTypeClasses {
 
-  private val intType = CustomType("Int")
-  private val unitType = CustomType("Unit")
+  private val intType = CustomType[Int]("Int")(_.isInstanceOf[Int])
+  private val unitType = CustomType[Unit]("Unit")(_.isInstanceOf[Unit])
 
   private val intDomain = (0 to 5).toSet
-  private val unitDomain = Set(0)
+  private val unitDomain = Set(())
 
   val typeEnv: Env = new Env {
     override def customTypeValues[T](c: CustomType[T]): Iterable[T] = {
@@ -54,19 +54,19 @@ object LogicTypeClasses {
       2
   }
 
-  def constructPair(p: List[Any]): Any =
+  def constructPair(p: List[Any]): (Any, Any) =
     (p(0), p(1))
 
-  def constructSome(p: List[Any]): Any =
+  def constructSome(p: List[Any]): Option[Any] =
     Some(p(0))
 
-  def constructNone(p: List[Any]): Any =
+  def constructNone(p: List[Any]): Option[Any] =
     None
 
-  def constructLeft(p: List[Any]): Any =
+  def constructLeft(p: List[Any]): Either[Any, Any] =
     Left(p(0))
 
-  def constructRight(p: List[Any]): Any =
+  def constructRight(p: List[Any]): Either[Any, Any] =
     Right(p(0))
 
   def genDatatype[T](size: Int): Gen[Datatype[T]] = {
@@ -74,17 +74,17 @@ object LogicTypeClasses {
       // pair
       for (x <- typeGen(size / 3); y <- typeGen(size / typeSize(x))) yield
         Datatype(s"Prod[${x.print}, ${y.print}]", List(
-          DtCase("Pair", List(x, y), constructPair))),
+          DtCase[(Any, Any)]("Pair", List(x, y))(constructPair, { case (a, b) => true case _ => false }, x => List(x._1, x._2)))),
       // option
       for (x <- typeGen(size / 2)) yield
         Datatype(s"Option[${x.print}]", List(
-          DtCase("None", List(), constructNone),
-          DtCase("Some", List(x), constructSome))),
+          DtCase[Option[_]]("None", List())(constructNone, _.isEmpty, _ => List()),
+          DtCase[Option[_]]("Some", List(x))(constructSome, _.isDefined, x => List(x.get)))),
       // either
       for (x <- typeGen(size / 3); y <- typeGen(size / typeSize(x))) yield
         Datatype(s"Either[${x.print}, ${y.print}]", List(
-          DtCase("Left", List(x), constructLeft),
-          DtCase("Right", List(y), constructRight))),
+          DtCase[Either[_, _]]("Left", List(x))(constructLeft, _.isLeft, x => List(x.swap.getOrElse(???))),
+          DtCase[Either[_, _]]("Right", List(y))(constructRight, _.isRight, x => List(x.getOrElse(???))))),
     ).asInstanceOf[Gen[Datatype[T]]]
   }
 

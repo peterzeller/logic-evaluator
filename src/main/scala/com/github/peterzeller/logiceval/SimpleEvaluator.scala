@@ -5,6 +5,10 @@ import com.github.peterzeller.logiceval.utils.HMap
 import shapeless.Id
 
 object SimpleEvaluator {
+  /** global flag for enabling type checks */
+  var checked: Boolean = true
+
+
   def startEval[T](expr: Expr[T], typeEnv: Env): T =
     eval(expr)(Ctxt(typeEnv))
 
@@ -23,7 +27,10 @@ object SimpleEvaluator {
   def eval[T](expr: Expr[T])(implicit ctxt: Ctxt): T = expr match {
     case v: Var[T] => ctxt(v)
     case Forall(v, t, body) =>
-      t.values(ctxt.env).forall(x => eval(body)(ctxt + (v -> x)))
+      t.values(ctxt.env).forall { x =>
+        checkType(t, x)
+        eval(body)(ctxt + (v -> x))
+      }
     case Neg(negatedExpr) =>
       !eval(negatedExpr)
     case And(left, right) =>
@@ -34,7 +41,9 @@ object SimpleEvaluator {
       eval(set).contains(eval(elem))
     case c: ConstructDt[t] =>
       val argsE: List[Any] = c.args.map((e: Expr[_]) => eval(e))
-      c.construct(argsE)
+      val res = c.construct(argsE)
+      checkType(c.typ, res)
+      res
     case g: Get[k, v] =>
       val m = eval(g.map)
       val k = eval(g.key)
@@ -42,9 +51,17 @@ object SimpleEvaluator {
     case Pair(a, b) =>
       (eval(a), eval(b))
     case g: Opaque[a, r] =>
-      g.func(ctxt.env, eval(g.arg))
-    case ConstExpr(v) => v
+      val res = g.func(ctxt.env, eval(g.arg))
+      checkType(g.resultType, res)
+      res
+    case c@ConstExpr(v) =>
+      checkType(c.typ, v)
+      v
   }
 
-
+  private def checkType[T](t: Type[T], v: Any): Unit = {
+    if (checked) {
+      assert(t.check(v), s"Value $v (${v.getClass}) is not an instance of $t.")
+    }
+  }
 }

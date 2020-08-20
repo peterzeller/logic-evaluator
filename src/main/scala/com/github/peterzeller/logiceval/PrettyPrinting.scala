@@ -18,6 +18,8 @@ object PrettyPrinting {
       name
     case BoolType() =>
       "Bool"
+    case PairType(a, b) =>
+      "(" <> printTyp(a) <> ", " <> printTyp(b) <> ")"
   }
 
   def op(prec1: Int, prec: Int, op: String, left: Expr[_], right: Expr[_]): Doc =
@@ -54,6 +56,8 @@ object PrettyPrinting {
       group(func.toString() <> "(" <> nested(2, printExpr(args, 100)) <> ")")
     case SimpleLogic.ConstExpr(v) =>
       printValue(v)
+    case Pair(a, b) =>
+      "(" <> printExpr(a, 100) <> ", " <> printExpr(b, 100) <> ")"
 
   }
 
