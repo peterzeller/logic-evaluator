@@ -5,6 +5,13 @@ import com.github.peterzeller.logiceval.utils.PrettyPrintDoc._
 
 object PrettyPrinting {
 
+  case class Ctxt(
+    vars: List[Var[_]] = List()
+  ) {
+    def withVar(v: Var[Any]): Ctxt =
+      copy(vars = v::vars)
+
+  }
 
   def paren(p: Boolean, doc: Doc): Doc =
     group(if (p) "(" <> doc <> ")" else doc)
@@ -22,7 +29,7 @@ object PrettyPrinting {
       "(" <> printTyp(a) <> ", " <> printTyp(b) <> ")"
   }
 
-  def op(prec1: Int, prec: Int, op: String, left: Expr[_], right: Expr[_]): Doc =
+  def op(prec1: Int, prec: Int, op: String, left: Expr[_], right: Expr[_])(implicit ctxt: Ctxt): Doc =
     paren(prec1 <= prec, printExpr(left, prec) <> nested(2, lineOrSpace <> op <+> printExpr(right, prec)))
 
   def printValue(v: Any): Doc = v match {
@@ -34,11 +41,14 @@ object PrettyPrinting {
       v.toString
   }
 
-  def printExpr(e: Expr[_], prec: Int): Doc = e match {
+  def printExpr(e: Expr[_], prec: Int)(implicit ctxt: Ctxt): Doc = e match {
     case SimpleLogic.Var(name) =>
       name
-    case SimpleLogic.Forall(v, typ, body) =>
-      paren(prec <= 50, "∀" <> v.name <> ": " <> printTyp(typ) <> nested(2, "." </> printExpr(body, 100)))
+    case Bound(index) =>
+      ctxt.vars(index).name
+    case SimpleLogic.ForallD(v, typ, body) =>
+      paren(prec <= 50, "∀" <> v.name <> ": " <> printTyp(typ) <> nested(2, "." </>
+        printExpr(body, 100)(ctxt.withVar(v))))
     case SimpleLogic.Neg(n) =>
       paren(prec <= 10, "¬" <> printExpr(n, 10))
     case SimpleLogic.And(left, right) =>

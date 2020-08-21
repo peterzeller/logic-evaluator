@@ -29,11 +29,12 @@ class NarrowingEvaluatorTest extends AnyFunSuite {
 
 
   def testExpr(expr: Expr[_])(implicit typeEnv: Env): Unit = {
+    println(s"$expr")
     val (t1, r1) = measure(() => SimpleEvaluator.startEval(expr, typeEnv))
     val (t2, r2) = measure(() => NarrowingEvaluator.startEval(expr, typeEnv))
 
     val ratio = t2.toDouble / t1.toDouble
-    println(s"$expr")
+
     println(s"Times: $t1 -- $t2 // ratio = $ratio")
     println()
     assert(r1 == r2)

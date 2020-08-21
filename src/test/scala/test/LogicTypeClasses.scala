@@ -52,6 +52,8 @@ object LogicTypeClasses {
       typeEnv.customTypeValues(c).size
     case SimpleLogic.BoolType() =>
       2
+    case PairType(a, b) =>
+      typeSize(a) * typeSize(b)
   }
 
   def constructPair(p: List[Any]): (Any, Any) =
@@ -126,6 +128,11 @@ object LogicTypeClasses {
         Gen.oneOf(typeEnv.customTypeValues(c))
       case SimpleLogic.BoolType() =>
         Gen.oneOf(false, true)
+      case PairType(a, b) =>
+        for {
+          x <- valueGen(a, size / 2)
+          y <- valueGen(b, size / 2)
+        } yield (x, y)
     }
   }
 

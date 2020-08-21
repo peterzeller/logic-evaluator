@@ -5,17 +5,18 @@ import com.github.peterzeller.logiceval.utils.HMap
 
 object TypeCheck {
 
-  case class Ctxt(vars: HMap[Var, Type] = HMap[Var, Type]()) {
-    def withBinding[T](tuple: (Var[T], Type[T])): Ctxt =
-      this.copy(vars = vars + tuple)
+  case class Ctxt(vars: List[Type[_]] = List()) {
+    def withBinding[T](t: Type[T]): Ctxt =
+      this.copy(vars = t :: vars)
 
-    def apply[T](v: Var[T]): Type[T] = vars(v)
+    def apply[T](b: Bound[T]): Type[T] = vars(b.index).asInstanceOf[Type[T]]
 
   }
 
   def calcType[T](expr: Expr[T])(implicit ctxt: Ctxt): Type[T] = expr match {
-    case v: Var[T] => ctxt(v)
-    case f: Forall[_] =>
+    case v: Var[T] => throw new Exception(s"Unexpected variable $v")
+    case b: Bound[T] => ctxt(b)
+    case f: ForallD[_] =>
       BoolType()
     case n: Neg => BoolType()
     case and: And => BoolType()
@@ -43,9 +44,10 @@ object TypeCheck {
 
     try {
       expr match {
-        case v: Var[T] => ctxt(v)
-        case f: Forall[_] =>
-          expect(f.body, BoolType())(ctxt withBinding (f.v -> f.typ))
+        case v: Var[T] => throw new Exception(s"Unexpected variable $v")
+        case b: Bound[T] => ctxt(b)
+        case f: ForallD[_] =>
+          expect(f.body, BoolType())(ctxt.withBinding(f.typ))
           BoolType()
         case n: Neg =>
           expect(n.negatedExpr, BoolType())

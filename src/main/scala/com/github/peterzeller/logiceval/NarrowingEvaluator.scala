@@ -66,12 +66,11 @@ object NarrowingEvaluator {
 
   class EvalException(msg: String, exc: Throwable = null) extends Exception(msg, exc)
 
-  case class Ctxt(env: Env, varValues: HMap[Var, SymbolicValue] = HMap[Var, SymbolicValue]()) {
-    def +[T](v: (Var[T], SymbolicValue[T])): Ctxt = copy(varValues = varValues + v)
+  case class Ctxt(env: Env, varValues: List[SymbolicValue[_]] = List()) {
+    def +[T](v: SymbolicValue[T]): Ctxt = copy(varValues = v :: varValues)
 
-    def apply[T](v: Var[T]): SymbolicValue[T] =
-      varValues.getOrElse(v,
-        throw new EvalException(s"Could not find $v in ${varValues.values}"))
+    def apply[T](v: Bound[T]): SymbolicValue[T] =
+      varValues(v.index).asInstanceOf[SymbolicValue[T]]
   }
 
 
@@ -94,14 +93,15 @@ object NarrowingEvaluator {
   //  var i = 0
 
   def evalS[T](expr: Expr[T])(implicit ctxt: Ctxt): SymbolicValue[T] = expr match {
-    case v: Var[t] => ctxt(v)
-    case f: Forall[T] =>
+    case v: Var[t] => throw new Exception(s"Unexpected var $v")
+    case b: Bound[t] => ctxt(b)
+    case f: ForallD[T] =>
       val setV: Iterable[T] = f.typ.values(ctxt.env)
       val v = f.v
       val body = f.body
 
       def evalBody(value: SymbolicValue[T]): Boolean = {
-        val newCtxt = ctxt + (v -> value)
+        val newCtxt = ctxt + value
         //        if (newCtxt.varValues.size == 3) {
         //          i += 1
         //          println(s"$i. exec body with ${newCtxt.varValues}")

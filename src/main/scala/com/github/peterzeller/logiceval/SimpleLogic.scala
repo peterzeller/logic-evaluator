@@ -1,8 +1,9 @@
 package com.github.peterzeller.logiceval
 
+import com.github.peterzeller.logiceval.PrettyPrinting.Ctxt
 import com.github.peterzeller.logiceval.utils.{LazyListUtils, PrettyPrintDoc}
-import scala.reflect.runtime.universe._
 
+import scala.reflect.runtime.universe._
 import scala.math.Ordered.orderingToOrdered
 import scala.math.Ordering.Implicits.seqOrdering
 
@@ -87,7 +88,7 @@ object SimpleLogic {
 
     /** checks if x is a value of this type */
     override def check(x: Any): Boolean =
-      cases.exists(c => c.check(x) )
+      cases.exists(c => c.check(x))
   }
 
   case class DtCase[T](name: String, argTypes: List[Type[_]])(val construct: List[Any] => T, checkC: T => Boolean, args: T => List[Any]) {
@@ -145,13 +146,14 @@ object SimpleLogic {
 
 
   sealed abstract class Expr[T] {
-    def doc: PrettyPrintDoc.Doc = PrettyPrinting.printExpr(this, 100)
+    def doc(implicit ctxt: Ctxt): PrettyPrintDoc.Doc = PrettyPrinting.printExpr(this, 100)
 
-    override def toString: String = doc.prettyStr(120)
+    override def toString: String = doc(Ctxt()).prettyStr(120)
 
     def freeVars: Set[Var[_]] = this match {
       case v: Var[_] => Set(v)
-      case f: Forall[t] =>
+      case b: Bound[t] => Set()
+      case f: ForallD[t] =>
         f.body.freeVars - f.v
       case n: Neg =>
         n.negatedExpr.freeVars
@@ -174,9 +176,53 @@ object SimpleLogic {
     }
   }
 
+  /**
+   * Variable with De Bruijn index
+   * index 0 refers to closest Forall quantifier
+   * index 1 to first surrounding one, and so on
+   */
+  case class Bound[T](index: Int) extends Expr[T]
+
   case class Var[T](name: String) extends Expr[T]
 
-  case class Forall[T](v: Var[T], typ: Type[T], body: Expr[Boolean]) extends Expr[Boolean]
+  case class ForallD[T](v: Var[T], typ: Type[T], body: Expr[Boolean]) extends Expr[Boolean] {
+    require(!body.freeVars.contains(v))
+  }
+
+  /** smart constructor for Forall, replaces vars in body with de-bruijn index */
+  def Forall[T](v: Var[T], typ: Type[T], body: Expr[Boolean]): ForallD[T] = {
+
+    def subst[S](e: Expr[S], index: Int): Expr[S] = {
+      e match {
+        case bound: Bound[T] =>bound
+        case v2: Var[T] =>
+          if (v2 == v) Bound(index)
+          else v2
+        case d: ForallD[t] =>
+          if (d.v == v) d
+          else d.copy(body = subst(d.body, index+1))
+        case neg: Neg =>
+          neg.copy(subst(neg.negatedExpr, index))
+        case and: And =>
+          and.copy(subst(and.left, index), subst(and.right, index))
+        case eq: Eq[t] =>
+          eq.copy(subst(eq.left, index), subst(eq.right, index))
+        case e: IsElem[t] =>
+          e.copy(subst(e.elem, index), subst(e.set, index))
+        case dt: ConstructDt[t] =>
+          dt.copy(args = dt.args.map(subst(_, index)))
+        case e: Get[k, v] =>
+          e.copy(subst(e.map, index), subst(e.key, index), subst(e.default, index))
+        case e: Pair[a, b] =>
+          e.copy(subst(e.a, index), subst(e.b, index))
+        case opaque: Opaque[a, r] =>
+          opaque.copy(arg = subst(opaque.arg, index))
+        case expr: ConstExpr[T] => expr
+      }
+    }
+
+    ForallD(v, typ, subst(body, 0))
+  }
 
   case class Neg(negatedExpr: Expr[Boolean]) extends Expr[Boolean]
 

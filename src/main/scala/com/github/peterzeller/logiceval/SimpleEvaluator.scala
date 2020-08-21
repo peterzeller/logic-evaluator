@@ -2,7 +2,7 @@ package com.github.peterzeller.logiceval
 
 import com.github.peterzeller.logiceval.SimpleLogic._
 import com.github.peterzeller.logiceval.utils.HMap
-import shapeless.Id
+import shapeless.{Id}
 
 object SimpleEvaluator {
   /** global flag for enabling type checks */
@@ -15,21 +15,22 @@ object SimpleEvaluator {
 
   class EvalException(msg: String, exc: Throwable = null) extends Exception(msg, exc)
 
-  case class Ctxt(env: Env, varValues: HMap[Var, Id] = HMap[Var, Id]()) {
-    def +[T](v: (Var[T], T)): Ctxt = copy(varValues = varValues + v)
+  case class Ctxt(env: Env, varValues: List[Any] = List()) {
+    def +[T](v: T): Ctxt = copy(varValues = v :: varValues)
 
-    def apply[T](v: Var[T]): T =
-      varValues.getOrElse(v,
-        throw new EvalException(s"Could not find $v in ${varValues.values}"))
+    def apply[T](i: Bound[T]): T =
+      varValues(i.index).asInstanceOf[T]
   }
 
 
   def eval[T](expr: Expr[T])(implicit ctxt: Ctxt): T = expr match {
-    case v: Var[T] => ctxt(v)
-    case Forall(v, t, body) =>
+    case v: Var[T] => throw new Exception(s"unexpected $v")
+    case b: Bound[T] =>
+      ctxt(b)
+    case ForallD(v, t, body) =>
       t.values(ctxt.env).forall { x =>
         checkType(t, x)
-        eval(body)(ctxt + (v -> x))
+        eval(body)(ctxt + x)
       }
     case Neg(negatedExpr) =>
       !eval(negatedExpr)
