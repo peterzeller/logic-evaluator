@@ -3,10 +3,6 @@ package com.github.peterzeller.logiceval
 import com.github.peterzeller.logiceval.PrettyPrinting.Ctxt
 import com.github.peterzeller.logiceval.utils.{LazyListUtils, PrettyPrintDoc}
 
-import scala.reflect.runtime.universe._
-import scala.math.Ordered.orderingToOrdered
-import scala.math.Ordering.Implicits.seqOrdering
-
 /**
  * Example logic
  */
@@ -232,19 +228,27 @@ object SimpleLogic {
 
   case class IsElem[T](elem: Expr[T], set: Expr[Set[T]]) extends Expr[Boolean]
 
-  case class ConstructDt[T](typ: Datatype[T], name: String, construct: List[Any] => T, args: List[Expr[_]]) extends Expr[T]
+  case class ConstructDt[T](typ: Datatype[T], name: DtCase[T], args: List[Expr[_]]) extends Expr[T]
 
   def optionType[T](t: Type[T]): Datatype[Option[T]] =
     Datatype("Option", List(
-      DtCase("None", List())(x => None, _.isEmpty, x => List()),
-      DtCase("Some", List(t))(x => Some(t.cast(x.head)), _.isDefined, x => List(x.get))
+      optionTypeNone,
+      optionTypeSome(t)
     ))
 
+  private def optionTypeSome[T](t: Type[T]) = {
+    DtCase[Option[T]]("Some", List(t))(x => Some(t.cast(x.head)), _.isDefined, x => List(x.get))
+  }
+
+  private def optionTypeNone[T] = {
+    DtCase[Option[T]]("None", List())(x => None, _.isEmpty, x => List())
+  }
+
   def SomeE[T](elem: Expr[T])(implicit t: Type[T]): Expr[Option[T]] =
-    ConstructDt(optionType(t), "Some", x => Some(x.head.asInstanceOf[T]), List(elem))
+    ConstructDt(optionType(t), optionTypeSome(t), List(elem))
 
   def NoneE[T](implicit t: Type[T]): Expr[Option[T]] =
-    ConstructDt(optionType(t), "None", _ => None, List())
+    ConstructDt(optionType(t), optionTypeNone, List())
 
 
   case class Get[K, V](map: Expr[Map[K, V]], key: Expr[K], default: Expr[V]) extends Expr[V]

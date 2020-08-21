@@ -1,7 +1,6 @@
 package com.github.peterzeller.logiceval
 
 import com.github.peterzeller.logiceval.SimpleLogic._
-import com.github.peterzeller.logiceval.utils.HMap
 
 object TypeCheck {
 
@@ -70,8 +69,9 @@ object TypeCheck {
           }
           BoolType()
         case c: ConstructDt[_] =>
-          val cas = c.typ.cases.find(_.name == c.name)
-            .getOrElse(throw new Exception(s"Could not find case ${c.name} in ${c.typ}"))
+          val cas = c.name
+          if (!c.typ.cases.contains(cas))
+            throw new Exception(s"Could not find case $cas in ${c.typ}")
           if (cas.argTypes.length != c.args.length)
             throw new Exception("Wrong number of args")
 

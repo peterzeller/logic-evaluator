@@ -1,7 +1,5 @@
 package com.github.peterzeller.logiceval.utils
 
-import com.github.peterzeller.logiceval.SimpleLogic
-
 import scala.collection.MapView
 
 case class HMap[K[_], V[_]](map: Map[K[_], V[_]] = Map[K[_], V[_]]()) {

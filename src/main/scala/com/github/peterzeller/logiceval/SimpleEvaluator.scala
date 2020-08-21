@@ -1,8 +1,6 @@
 package com.github.peterzeller.logiceval
 
 import com.github.peterzeller.logiceval.SimpleLogic._
-import com.github.peterzeller.logiceval.utils.HMap
-import shapeless.{Id}
 
 object SimpleEvaluator {
   /** global flag for enabling type checks */
@@ -42,7 +40,7 @@ object SimpleEvaluator {
       eval(set).contains(eval(elem))
     case c: ConstructDt[t] =>
       val argsE: List[Any] = c.args.map((e: Expr[_]) => eval(e))
-      val res = c.construct(argsE)
+      val res = c.name.construct(argsE)
       checkType(c.typ, res)
       res
     case g: Get[k, v] =>

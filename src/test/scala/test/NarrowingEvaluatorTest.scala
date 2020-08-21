@@ -1,17 +1,11 @@
 package test
 
-import com.github.peterzeller.logiceval.{NarrowingEvaluator, SimpleEvaluator, TypeCheck}
 import com.github.peterzeller.logiceval.SimpleLogic._
-import com.github.peterzeller.logiceval.utils.HMap
-import org.scalacheck.{Gen, Prop, Properties, Test}
-import org.scalatest.funsuite.AnyFunSuite
-import org.scalatest.matchers.should.Matchers
+import com.github.peterzeller.logiceval.{NarrowingEvaluator, SimpleEvaluator, SimpleLogic, TypeCheck}
 import org.scalacheck.Prop.forAll
-import org.scalacheck.rng.Seed
-import org.scalacheck.util.Pretty
+import org.scalacheck.Test
+import org.scalatest.funsuite.AnyFunSuite
 import test.LogicTypeClasses._
-
-import scala.collection.immutable.TreeSet
 
 
 class NarrowingEvaluatorTest extends AnyFunSuite {
@@ -80,6 +74,82 @@ class NarrowingEvaluatorTest extends AnyFunSuite {
 
   }
 
+  test("simpleEq") {
+    val x1 = Var[Int]("x1")
+
+
+    val intDom = (0 to 100000)
+    implicit val t_int: Type[Int] = CustomType("Int")(_.isInstanceOf[Int])
+    implicit val t_int_set: Type[Set[Int]] = SetType(t_int)
+
+    implicit val typeEnv: Env = new Env {
+      override def customTypeValues[T](c: CustomType[T]): Iterable[T] = intDom.asInstanceOf[Iterable[T]]
+    }
+
+    testExpr(
+      Forall(x1, t_int,
+        Neg(Eq(x1, ConstExpr(99999))
+        )
+      ))
+
+    testExpr(
+      Forall(x1, t_int,
+        Eq(x1, ConstExpr(99999))
+      ))
+
+  }
+
+  test("simpleEq unit") {
+    val x1 = Var[Unit]("x1")
+
+
+    val intDom = Set(())
+    implicit val t_unit: Type[Unit] = CustomType("Unit")(_.isInstanceOf[Unit])
+    implicit val t_int_set: Type[Set[Unit]] = SetType(t_unit)
+
+    implicit val typeEnv: Env = new Env {
+      override def customTypeValues[T](c: CustomType[T]): Iterable[T] = intDom.asInstanceOf[Iterable[T]]
+    }
+
+    testExpr(
+      Forall(x1, t_unit,
+        Neg(Eq(x1, ConstExpr(()))
+        )
+      ))
+
+    testExpr(
+      Forall(x1, t_unit,
+        Eq(x1, ConstExpr(()))
+      ))
+
+  }
+
+  test("datatype eq") {
+    val x1 = Var[Int]("x1")
+
+
+    val intDom = (0 to 100)
+    implicit val t_int: Type[Int] = CustomType("Int")(_.isInstanceOf[Int])
+    implicit val t_int_set: Type[Set[Int]] = SetType(t_int)
+
+    implicit def t_option[T](implicit t: Type[T]): Datatype[Option[T]] = SimpleLogic.optionType(t)
+
+    implicit val typeEnv: Env = new Env {
+      override def customTypeValues[T](c: CustomType[T]): Iterable[T] = intDom.asInstanceOf[Iterable[T]]
+    }
+
+    val t_option_int = t_option(t_int)
+    testExpr(
+      Forall(x1, t_int,
+        Neg(Eq(
+          ConstructDt(t_option_int, t_option_int.cases(1), List(x1)),
+          ConstExpr[Option[Int]](Some(42)))
+        )
+      ))
+
+  }
+
+
   test("equals formula short") {
     /*
     ¬(¬(∀x1: Int. ∀x2: Int. ¬(∀x3: Int. x2 = x3 ∧ x1 ∈ {2, 3})))
@@ -90,7 +160,7 @@ class NarrowingEvaluatorTest extends AnyFunSuite {
     val S = Set(2, 3)
 
 
-    val intDom = (0 to 2000).toSet
+    val intDom = (0 to 5).toSet
     implicit val t_int: Type[Int] = CustomType("Int")(_.isInstanceOf[Int])
     implicit val t_int_set: Type[Set[Int]] = SetType(t_int)
 

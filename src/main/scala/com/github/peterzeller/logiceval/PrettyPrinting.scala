@@ -45,7 +45,11 @@ object PrettyPrinting {
     case SimpleLogic.Var(name) =>
       name
     case Bound(index) =>
-      ctxt.vars(index).name
+      try {
+        ctxt.vars(index).name
+      } catch {
+        case _: IndexOutOfBoundsException => index.toString
+      }
     case SimpleLogic.ForallD(v, typ, body) =>
       paren(prec <= 50, "∀" <> v.name <> ": " <> printTyp(typ) <> nested(2, "." </>
         printExpr(body, 100)(ctxt.withVar(v))))
@@ -58,8 +62,8 @@ object PrettyPrinting {
       op(prec, 15, "=", left, right)
     case SimpleLogic.IsElem(elem, set) =>
       op(prec, 14, "∈", elem, set)
-    case SimpleLogic.ConstructDt(_, name, c, args) =>
-      group(name <> "(" <> nested(2, line <> sep("," <> lineOrSpace, args.map(printExpr(_, 100)))) <> ")")
+    case SimpleLogic.ConstructDt(_, name, args) =>
+      group(name.name <> "(" <> nested(2, line <> sep("," <> lineOrSpace, args.map(printExpr(_, 100)))) <> ")")
     case SimpleLogic.Get(map, key, _) =>
       printExpr(map, 5) <> "[" <> printExpr(key, 100) <> "]"
     case SimpleLogic.Opaque(_, _, func, args) =>

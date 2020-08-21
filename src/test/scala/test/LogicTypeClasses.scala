@@ -4,16 +4,9 @@ import java.lang.Math.{log, min}
 
 import com.github.peterzeller.logiceval.SimpleLogic
 import com.github.peterzeller.logiceval.SimpleLogic._
-import org.scalacheck.{Arbitrary, Gen}
-import org.scalacheck._
-import Gen._
-import Arbitrary.arbitrary
-import com.github.peterzeller.logiceval.NarrowingEvaluator.AnyValue
 import com.github.peterzeller.logiceval.utils.HMap
-import org.scalacheck.util.Buildable
-import test.LogicTypeClasses.valueGen
-
-import scala.collection.immutable
+import org.scalacheck.Gen._
+import org.scalacheck.{Arbitrary, Gen}
 
 object LogicTypeClasses {
 
@@ -185,7 +178,7 @@ object LogicTypeClasses {
               100 -> (for {
                 c <- Gen.oneOf(cases)
                 args <- Gen.lzy(Gen.sequence[List[Expr[_]], Expr[_]](c.argTypes.map(exprGen(_, size / c.argTypes.size - 1, vars))))
-              } yield ConstructDt(dt, c.name, c.construct, args))
+              } yield ConstructDt(dt, c, args))
             )
           case _ =>
             // generate a constant expression for the type
