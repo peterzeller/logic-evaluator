@@ -124,6 +124,33 @@ class NarrowingEvaluatorTest extends AnyFunSuite {
 
   }
 
+  test("simpleEq empty") {
+    val x1 = Var[Unit]("x1")
+    val x2 = Var[Unit]("x1")
+    val x3 = Var[Unit]("x1")
+
+    val intDom = Set()
+    implicit val t_unit: Type[Unit] = CustomType("Unit")(_.isInstanceOf[Unit])
+    implicit val t_int_set: Type[Set[Unit]] = SetType(t_unit)
+
+    implicit val typeEnv: Env = new Env {
+      override def customTypeValues[T](c: CustomType[T]): Iterable[T] = intDom.asInstanceOf[Iterable[T]]
+    }
+
+    testExpr(
+      Forall(x1, t_unit,
+        Forall(x2, t_unit,
+          Forall(x3, t_unit,
+            Neg(Eq(x2, x1)
+            )
+          )
+        )
+      )
+    )
+
+
+  }
+
   test("datatype eq") {
     val x1 = Var[Int]("x1")
 

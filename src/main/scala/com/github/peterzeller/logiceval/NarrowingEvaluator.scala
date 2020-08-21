@@ -41,7 +41,7 @@ object NarrowingEvaluator {
 
   }
 
-  class NoMoreValuesException(b: Bound[_]) extends Exception
+  case class NoMoreValuesException(b: Bound[_]) extends Exception
 
 
   def startEval[T](expr: Expr[T], env: Env): T = {
@@ -67,7 +67,7 @@ object NarrowingEvaluator {
               case SymNotInSet(set) =>
                 allValues(b).iterator.filter(!set.contains(_))
             }
-          res = it.nextOption().getOrElse(throw new NoMoreValuesException(b))
+          res = it.nextOption().getOrElse(throw NoMoreValuesException(b))
           remainingValues(b) = remainingValues(b) ++ it
           boundValues(b) = res
         case _ =>
@@ -90,7 +90,16 @@ object NarrowingEvaluator {
 //          val indent = "  " * boundValues.size
 //          println(s"$indent eval $expr")
 //          println(s"$indent with ${boundValues(currentBound)}")
-          val r: Boolean = eval(body)
+          val r: Boolean =
+            try {
+              eval(body)
+            } catch {
+              case NoMoreValuesException(bv) =>
+                if (bv.index == 0)
+                  return true
+                else
+                  throw NoMoreValuesException(bv.copy(bv.index - 1))
+            }
 //          println(s"$indent end with ${boundValues(currentBound)}")
           if (!r) {
             false
