@@ -5,7 +5,8 @@ ThisBuild / version          := "0.1.0-SNAPSHOT"
 ThisBuild / organization     := "com.example"
 ThisBuild / organizationName := "example"
 
-lazy val smallcheck = RootProject(file("../smallcheck4scala/"))
+// for devolpment:
+//lazy val smallcheck = RootProject(file("../smallcheck4scala/"))
 
 lazy val root = (project in file("."))
   .settings(
@@ -15,8 +16,8 @@ lazy val root = (project in file("."))
     libraryDependencies += "org.scalacheck" %% "scalacheck" % "1.14.1" % Test,
     libraryDependencies += "com.chuusai" %% "shapeless" % "2.3.3",
     libraryDependencies += "org.scala-lang" % "scala-reflect" % scalaVersion.value,
-//      libraryDependencies += "com.github.peterzeller" % "smallcheck4scala" % "54fc87c616" % Test
-  ).dependsOn(smallcheck)
+      libraryDependencies += "com.github.peterzeller" % "smallcheck4scala" % "6ad54a3374" % Test
+  )//.dependsOn(smallcheck)
 
 
 
