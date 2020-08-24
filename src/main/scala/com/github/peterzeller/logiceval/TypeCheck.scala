@@ -1,10 +1,11 @@
 package com.github.peterzeller.logiceval
 
 import com.github.peterzeller.logiceval.SimpleLogic._
+import com.github.peterzeller.logiceval.utils.HMap
 
 object TypeCheck {
 
-  case class Ctxt(vars: List[Type[_]] = List()) {
+  case class Ctxt(vars: List[Type[_]] = List(), namedVars: HMap[Var, Type] = HMap[Var, Type]()) {
     def withBinding[T](t: Type[T]): Ctxt =
       this.copy(vars = t :: vars)
 
@@ -13,7 +14,7 @@ object TypeCheck {
   }
 
   def calcType[T](expr: Expr[T])(implicit ctxt: Ctxt): Type[T] = expr match {
-    case v: Var[T] => throw new Exception(s"Unexpected variable $v")
+    case v: Var[T] => ctxt.namedVars(v)
     case b: Bound[T] => ctxt(b)
     case f: ForallD[_] =>
       BoolType()

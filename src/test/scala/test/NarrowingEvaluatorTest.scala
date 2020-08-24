@@ -5,7 +5,9 @@ import com.github.peterzeller.logiceval.{NarrowingEvaluator, SimpleEvaluator, Si
 import org.scalacheck.Prop.forAll
 import org.scalacheck.Test
 import org.scalatest.funsuite.AnyFunSuite
+import smallcheck.{Drivers, Property, SmallCheck}
 import test.LogicTypeClasses._
+import test.SmallCheckSeries.implicitExprSeries
 
 
 class NarrowingEvaluatorTest extends AnyFunSuite {
@@ -48,7 +50,7 @@ class NarrowingEvaluatorTest extends AnyFunSuite {
     val x3 = Var[Int]("x3")
     val S = Set(1800, 203, 1515, 891, 885, 32, 200, 1622, 1635, 1688, 241, 1356, 494, 576, 1418, 1040, 311, 373, 1596, 1049, 446, 370, 412, 62, 1941, 1541, 967, 1247, 829, 902, 914, 1038, 1647, 746, 2000, 509, 1281, 236, 1373, 575, 1268, 175, 1151, 390, 1939, 677, 239, 513, 1052, 34, 1537, 61, 978, 1750, 443, 695, 687, 755, 420, 340, 1771, 155, 628, 1134, 1360)
 
-    val intDom = (0 to 2000).toSet
+    val intDom = (0L to 2000L).toSet
     implicit val t_int: Type[Int] = CustomType("Int")(_.isInstanceOf[Int])
     implicit val t_int_set: Type[Set[Int]] = SetType(t_int)
 
@@ -78,7 +80,7 @@ class NarrowingEvaluatorTest extends AnyFunSuite {
     val x1 = Var[Int]("x1")
 
 
-    val intDom = (0 to 100000)
+    val intDom: Seq[Long] = (0L to 100000L)
     implicit val t_int: Type[Int] = CustomType("Int")(_.isInstanceOf[Int])
     implicit val t_int_set: Type[Set[Int]] = SetType(t_int)
 
@@ -155,7 +157,7 @@ class NarrowingEvaluatorTest extends AnyFunSuite {
     val x1 = Var[Int]("x1")
 
 
-    val intDom = (0 to 100)
+    val intDom = (0L to 100L)
     implicit val t_int: Type[Int] = CustomType("Int")(_.isInstanceOf[Int])
     implicit val t_int_set: Type[Set[Int]] = SetType(t_int)
 
@@ -187,7 +189,7 @@ class NarrowingEvaluatorTest extends AnyFunSuite {
     val S = Set(2, 3)
 
 
-    val intDom = (0 to 5).toSet
+    val intDom = (0L to 5L).toSet
     implicit val t_int: Type[Int] = CustomType("Int")(_.isInstanceOf[Int])
     implicit val t_int_set: Type[Set[Int]] = SetType(t_int)
 
@@ -213,7 +215,7 @@ class NarrowingEvaluatorTest extends AnyFunSuite {
 
   }
 
-  test("equal to simple evaluator") {
+  test("ScalaCheck: equal to simple evaluator") {
     println("Foo")
     var timeS = 0L
     var timeN = 0L
@@ -278,13 +280,18 @@ class NarrowingEvaluatorTest extends AnyFunSuite {
 
   }
 
-  //  test("gentest") {
-  //    //    for (i <- 0 to 1000) {
-  //    val i = 4
-  //    val gen = LogicTypeClasses.exprGen(BoolType(), 100000, HMap[Var, Type]())
-  //    val res = gen.apply(Gen.Parameters.default.withSize(100000), Seed(i))
-  //    println(s"$i. res = $res")
-  //    //    }
-  //  }
+
+  test("SmallCheck: equal to simple evaluator") {
+
+    SmallCheck.check(2000, Property.forAll { (expr: Expr[Boolean]) =>
+      TypeCheck.checkType(expr)(TypeCheck.Ctxt())
+
+      val r1 = SimpleEvaluator.startEval(expr, typeEnv)
+      val r2 = NarrowingEvaluator.startEval(expr, typeEnv)
+      r1 == r2
+    })
+
+  }
+
 
 }
